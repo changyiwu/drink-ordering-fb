@@ -13,7 +13,7 @@
 ## 目標與路線圖
 
 - [x] 階段一：訂購前端與多店菜單（50嵐、清心福全、CoCo、鮮茶道、Mr. Wish）
-- [x] 階段二：跨 Agent 規則入口統一為 `agents.md`
+- [x] 階段二：跨 Agent 規則入口統一為 `AGENTS.md`
 - [x] 階段三：強化 `firestore.rules`——保護設定文件、限制管理授權文件擁有者、新增訂單時驗證姓名／杯數／價格欄位
 - [x] 階段四：使用 Firebase CLI 部署並測試新 Firestore 規則
 - [x] 階段五：驗證匿名使用者新增／修改／刪除自己訂單（線上實測 29 項全數通過）
@@ -42,7 +42,7 @@ drink-ordering-gh/
 │                     # 分享入口頁（帶專屬 OG 標籤後轉址）
 ├─ images/            # 所有圖片素材（banner、店家 logo、favicon）
 ├─ README.md
-├─ agents.md           # 本檔：專案藍圖
+├─ AGENTS.md           # 本檔：專案藍圖
 ├─ handoff.md          # 交接檔（每次收工必更新）
 └─ .gitignore
 ```
@@ -51,7 +51,7 @@ drink-ordering-gh/
 
 | 層級 | 平台 | 位置 | 讀取時機 |
 |------|------|------|---------|
-| L1 | 本地（GDrive） | `agents.md`＋`handoff.md` | 每個 session |
+| L1 | 本地（GDrive） | `AGENTS.md`＋`handoff.md` | 每個 session |
 | L2 | GitHub | https://github.com/changyiwu/drink-ordering-gh （公開） | 指定時 |
 | L3 | Obsidian | `drink-ordering-gh/專案工作流程.md` | 有需要時 |
 
@@ -60,7 +60,7 @@ drink-ordering-gh/
 | 檔案 | 時效 | 寫入方式 | 放什麼 |
 |------|------|---------|--------|
 | `handoff.md` | **只對下一個 session 有效**，過期即丟 | 每次收工整份重寫 | 做到哪、下一步、**這次**的暫時 workaround |
-| `agents.md`（本檔） | **長期有效**，每個 session 都適用 | 只有規則本身變了才改 | 目標、路線圖、常設規則、結構 |
+| `AGENTS.md`（本檔） | **長期有效**，每個 session 都適用 | 只有規則本身變了才改 | 目標、路線圖、常設規則、結構 |
 | Obsidian／`git log` | **歷史**：發生過什麼、為什麼 | 只增不刪 | 決策紀錄、踩坑完整版、逐次進度 |
 
 驗收標準：**`handoff.md` 整份刪掉，不應損失任何長期資訊**——會的話代表該升級進本檔卻沒升級。

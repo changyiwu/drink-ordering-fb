@@ -7,7 +7,7 @@
 
 ## 目錄結構
 * `README.md` - 專案說明文件
-* `agents.md` - 跨 Agent 工作區規則與配置
+* `AGENTS.md` - 跨 Agent 工作區規則與配置
 * `firestore.rules` - Firestore 安全規則
 * `tools/set-admin-password.mjs` - 產生管理員密碼與 SHA-256 雜湊
 * `.gitignore` - Git 忽略設定
