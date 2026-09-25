@@ -25,8 +25,8 @@
 
 Firestore 規則核對 Firebase Authentication 核發的登入方式與 `config/admin.adminUid`，
 不信任畫面上的登入狀態。舊 `admin_auth` 和 `admin_probe` 路徑已在規則中封鎖。
-Firebase Authentication 會對異常密碼嘗試節流；App Check 的 Firestore 強制執行
-提供另一層來源檢查，但 Authentication 的 App Check 目前尚未強制執行。
+Firebase Authentication 會對異常密碼嘗試節流；Firestore 與 Authentication
+的 App Check 在正式專案均已強制執行，提供另一層來源檢查。
 
 ## 管理員密碼設定與更換
 
@@ -49,7 +49,7 @@ App Check 會擋掉非本站來源的自動化用戶端，降低匿名登入被�
 2. 取得網站金鑰（site key）
 3. 填入 `shop.js` 的 `APP_CHECK_SITE_KEY` 常數
 4. 觀察 Console 的 App Check 指標，確認正常流量都帶著有效 token 後，
-   開啟 Firestore 的**強制執行（enforcement）**。目前正式專案已強制執行 Firestore App Check
+   開啟 Firestore 與 Authentication 的**強制執行（enforcement）**。目前正式專案兩者均已強制執行
 
 App Check 只在 `APP_CHECK_HOSTS` 列出的網域啟用（目前為 `changyiwu.github.io`）。
 本機開發不受影響——見下節，localhost 根本不會初始化 Firebase。

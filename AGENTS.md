@@ -19,8 +19,8 @@
 - [x] 階段五：驗證匿名使用者新增／修改／刪除自己訂單（線上實測 29 項全數通過）
 - [x] 階段六：網站視覺、效能與可用性改善（標題對比、品牌 logo、banner 壓縮、選單分組、觸控尺寸、分享入口頁）
 - [x] 階段七：圖片素材集中至 `images/`
-- [ ] 階段八：由使用者實測主揪人登入與清除全部訂單，確認 Firebase Authentication 與 `config/admin.adminUid` 設定正確
-- [x] 階段九：Firestore App Check 已強制執行；Authentication 尚未強制執行
+- [ ] 階段八：主揪人登入已由使用者在正式站驗證；清除全部訂單尚待安全實測
+- [x] 階段九：Firestore 與 Authentication App Check 均已強制執行
 - [ ] 階段十（待評估）：訂單目前對任何匿名使用者全部可讀（含姓名），評估是否要限制
 - [x] 階段十一：本機開發環境——看板渲染收斂為單一 `renderBoard()`，並新增 localhost 離線示範模式
 - [x] 階段十二：清除入口改為主揪人登入制——移除「一鍵清除」按鈕，改為登入後才顯示清除與跨人刪除
@@ -84,7 +84,7 @@ drink-ordering-fb/
 - 刪除權限分兩層：訂購者只能刪自己的（`resource.data.userId == request.auth.uid`），主揪人登入後可刪任何人的、也能一次清空本頁（`isAdmin()`）。前端的登入狀態只是 UI 開關，**真正的判定完全在規則層**
 - 主揪人維持密碼單欄畫面，Firebase Authentication Email/Password 驗證固定帳號；訂購者的匿名 Auth 與管理員記憶體 Auth 分開，不能混用
 - Firestore `isAdmin()` 必須驗證密碼登入方式與 `config/admin.adminUid`，不能只相信前端旗標；舊 `admin_auth`、`admin_probe` 一律拒絕用戶端操作
-- Firebase Authentication 提供異常登入嘗試節流；Firestore App Check 正式站已強制執行，Authentication App Check 尚未強制執行
+- Firebase Authentication 提供異常登入嘗試節流；Firestore 與 Authentication App Check 在正式站均已強制執行
 - 變更密碼請到 Firebase Authentication 重設；舊密碼雜湊工具已移除，`passwordHash` 不再授權管理員
 - 換網域時要**同步更新三處**：`shop.js` 的 `APP_CHECK_HOSTS`、reCAPTCHA 主控台網域清單、Firebase Console 的 App Check 設定。漏改會**靜默失敗**（未 Enforce 時完全無感）
 - 規則中判斷 `size` 欄位必須寫 `data['size']`，寫 `data.size` 會與 Map 的 `size()` 方法混淆
