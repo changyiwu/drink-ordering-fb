@@ -22,6 +22,7 @@
         "destination": "https://changyiwu.github.io/drink-ordering-fb/:path",
         "type": 302
       }
-    ]
+    ],
+    "site": "drink-ordering-chang"
   }
 }
