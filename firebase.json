@@ -10,6 +10,18 @@
       "**/node_modules/**",
       "AGENTS.md",
       "handoff.md"
+    ],
+    "redirects": [
+      {
+        "source": "/",
+        "destination": "https://changyiwu.github.io/drink-ordering-fb/",
+        "type": 302
+      },
+      {
+        "source": "/:path*",
+        "destination": "https://changyiwu.github.io/drink-ordering-fb/:path",
+        "type": 302
+      }
     ]
   }
 }

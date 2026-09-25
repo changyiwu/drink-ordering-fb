@@ -11,10 +11,9 @@ import {
   doc,
   where,
   writeBatch,
-  getDocs,
-  setDoc
+  getDocs
 } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
-import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+import { getAuth, initializeAuth, inMemoryPersistence, signInAnonymously, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 import { initializeAppCheck, ReCaptchaV3Provider } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js';
 
 import { SHOPS_DATA } from './menu_data.js';
@@ -117,6 +116,7 @@ const firebaseConfig = {
 // App Check：擋掉非本站來源的自動化用戶端，降低匿名登入被腳本濫用的風險。
 // Console 設定步驟見 README 的「App Check 設定」章節。
 const APP_CHECK_SITE_KEY = '6LedLWUtAAAAAMs3XiNCFbffNp09yyO25spincPN';
+const ADMIN_EMAIL = 'changyiwu@gmail.com';
 
 // 只在正式網域啟用。本機以 file:// 或 localhost 開啟時 reCAPTCHA 換不到有效 token，
 // 跳過初始化才不會擋住開發。此處必須與 reCAPTCHA 主控台註冊的網域一致；
@@ -138,6 +138,8 @@ const DEMO_ADMIN_PASSWORD = 'demo';
 let db = null;
 let auth = null;
 let ordersCollection = null;
+let adminAuth = null;
+let adminDb = null;
 
 // 目前使用者的 UID。看板渲染只讀這個變數、不直接碰 auth，
 // 資料來源換掉時（例如改餵假資料）渲染路徑就不必跟著改。
@@ -157,15 +159,23 @@ function initFirebase() {
   auth = getAuth(app);
   ordersCollection = collection(db, 'orders');
 
+  // 管理員使用獨立且只存記憶體的登入，不取代訂購者的匿名身分。
+  const adminApp = initializeApp(firebaseConfig, 'drink-ordering-admin');
+  if (APP_CHECK_SITE_KEY && APP_CHECK_HOSTS.includes(location.hostname)) {
+    initializeAppCheck(adminApp, {
+      provider: new ReCaptchaV3Provider(APP_CHECK_SITE_KEY),
+      isTokenAutoRefreshEnabled: true
+    });
+  }
+  adminAuth = initializeAuth(adminApp, { persistence: inMemoryPersistence });
+  adminDb = getFirestore(adminApp);
+
   // Sign in anonymously
   signInAnonymously(auth)
     .then((userCredential) => {
       myUid = userCredential.user.uid;
       console.log('Firebase Anonymous Auth Success. UID:', myUid);
-
-      // 上一次若沒走到登出（直接關分頁、當掉），admin_auth 會殘留而讓同一個
-      // 匿名 UID 仍具管理權限。載入時清一次，確保「重新整理 = 未登入」。
-      deleteDoc(doc(db, 'admin_auth', myUid)).catch(() => {});
+      renderBoard(lastOrders);
     })
     .catch((error) => {
       console.error('Firebase Auth failed:', error);
@@ -387,7 +397,7 @@ async function deleteOrder(id, buyerName, isOwnOrder) {
       if (DEMO_MODE) {
         demoDeleteOrder(id);
       } else {
-        await deleteDoc(doc(db, 'orders', id));
+        await deleteDoc(doc(isHostLoggedIn ? adminDb : db, 'orders', id));
       }
       showToast('🗑️ 訂單已成功刪除');
     } catch (error) {
@@ -400,11 +410,9 @@ async function deleteOrder(id, buyerName, isOwnOrder) {
 // ---------------------------------------------------------------------------
 // 主揪人登入
 //
-// 清除全部訂單的入口從「按下去才問密碼」改成「先登入才看得到」。權限判定仍然
-// 完全在 Firestore 規則層：登入只是把密碼雜湊寫進 admin_auth/{uid}，再對
-// admin_probe/{uid} 寫一份空文件試水溫——規則的 allow/deny 就是「密碼對不對」
-// 的唯一回覆，前端無從自行判斷（config/admin 前端不可讀）。
-// 登入狀態只存在記憶體，重新整理就要重登。
+// 畫面仍只收一組主揪人密碼。Firebase Authentication 驗證密碼並限制異常嘗試；
+// Firestore 規則只信任指定的管理員 UID，訂購者的匿名身分保持獨立。
+// 管理員登入只存在記憶體，重新整理就要重登。
 // ---------------------------------------------------------------------------
 
 let isHostLoggedIn = false;
@@ -439,32 +447,17 @@ function showHostLoginError(message) {
   hostPasswordGroup.classList.add('invalid');
 }
 
-// 正式模式的密碼驗證：寫得進 admin_probe 就代表雜湊與 config/admin 相符。
-// 探針文件只是規則的回覆管道，驗證完就刪掉。
+// 正式模式由 Firebase Authentication 檢查密碼，錯誤嘗試不再寫入 Firestore。
 async function verifyHostPassword(password) {
-  if (DEMO_MODE) {
-    return password === DEMO_ADMIN_PASSWORD;
-  }
+  if (DEMO_MODE) return password === DEMO_ADMIN_PASSWORD;
 
-  const uid = auth.currentUser.uid;
-  // 只寫入 SHA-256 雜湊，明文密碼不離開瀏覽器，資料庫內也不留明文
-  await setDoc(doc(db, 'admin_auth', uid), { passwordHash: await sha256Hex(password) });
-
-  const probeRef = doc(db, 'admin_probe', uid);
   try {
-    await setDoc(probeRef, {});
+    await signInWithEmailAndPassword(adminAuth, ADMIN_EMAIL, password);
+    return true;
   } catch (error) {
-    if (error.code === 'permission-denied') {
-      // 密碼錯誤：把剛才寫入的錯誤雜湊收乾淨，避免殘留
-      await deleteDoc(doc(db, 'admin_auth', uid)).catch(() => {});
-      return false;
-    }
+    if (['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found'].includes(error.code)) return false;
     throw error;
   }
-
-  // 探針的任務結束；刪不掉也不影響權限（授權來源是 admin_auth）
-  await deleteDoc(probeRef).catch(() => {});
-  return true;
 }
 
 hostLoginBtn.addEventListener('click', () => {
@@ -517,7 +510,9 @@ hostLoginForm.addEventListener('submit', async (e) => {
     }
   } catch (error) {
     console.error('Host login failed: ', error);
-    showHostLoginError('登入失敗，請稍後再試');
+    showHostLoginError(error.code === 'auth/too-many-requests'
+      ? '登入嘗試過多，請稍後再試'
+      : '登入失敗，請稍後再試');
   } finally {
     hostLoginSubmit.disabled = false;
     hostLoginSubmit.querySelector('.btn-text').textContent = '登入';
@@ -525,25 +520,13 @@ hostLoginForm.addEventListener('submit', async (e) => {
 });
 
 async function hostLogout() {
+  if (!DEMO_MODE) await signOut(adminAuth);
   setHostLoggedIn(false);
-  if (!DEMO_MODE && auth?.currentUser) {
-    // 刪掉授權文件，之後的清除請求就會被規則擋下
-    await deleteDoc(doc(db, 'admin_auth', auth.currentUser.uid)).catch((error) => {
-      console.error('Error clearing admin auth doc: ', error);
-    });
-  }
 }
 
 hostLogoutBtn.addEventListener('click', async () => {
   await hostLogout();
   showToast('👋 已登出主揪人');
-});
-
-// 關閉分頁時盡力收掉授權文件（不保證送達，登入本來就只在本次瀏覽有效）
-window.addEventListener('pagehide', () => {
-  if (isHostLoggedIn && !DEMO_MODE && auth?.currentUser) {
-    deleteDoc(doc(db, 'admin_auth', auth.currentUser.uid)).catch(() => {});
-  }
 });
 
 // Clear All Shop Orders logic（只有登入後才看得到這顆按鈕）
@@ -570,7 +553,7 @@ clearAllBtn.addEventListener('click', async () => {
       }
     } else {
       // 獲取該店家的所有訂單
-      const q = query(ordersCollection, where('shopId', '==', shopId));
+      const q = query(collection(adminDb, 'orders'), where('shopId', '==', shopId));
       const querySnapshot = await getDocs(q);
 
       if (querySnapshot.empty) {
@@ -578,12 +561,12 @@ clearAllBtn.addEventListener('click', async () => {
         return;
       }
 
-      const batch = writeBatch(db);
+      const batch = writeBatch(adminDb);
       querySnapshot.forEach((doc) => {
         batch.delete(doc.ref);
       });
 
-      // 執行批次刪除（此時 Firestore 安全規則會至 admin_auth 與 config/admin 比對密碼）
+      // 執行批次刪除；每筆都由 Firestore 規則核對管理員 UID。
       await batch.commit();
       showToast(`🗑️ 已成功清除所有《${shopInfo.name}》的訂單！`);
     }
@@ -879,17 +862,6 @@ function demoClearAll() {
   });
   demoEmit();
   return deleted;
-}
-
-// 以 SHA-256 計算十六進位雜湊；crypto.subtle 只在安全環境（HTTPS 或 localhost）可用
-async function sha256Hex(text) {
-  if (!globalThis.crypto || !globalThis.crypto.subtle) {
-    throw new Error('目前不是安全連線環境（需要 HTTPS），無法計算密碼雜湊');
-  }
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
 }
 
 // Escape HTML utility function for security

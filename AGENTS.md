@@ -1,10 +1,10 @@
-# drink-ordering-gh（專案藍圖）
+# drink-ordering-fb（專案藍圖）
 
 > 本檔為跨 Agent 通用的專案藍圖（AGENTS.md 開放標準）。任何 Agent 的每個 session 都應先讀本檔＋`handoff.md`。
 
 ## 專案簡介
 
-飲料訂購系統。純靜態前端搭配 Firebase Firestore，支援多家飲料店菜單、匿名下單與管理員清除流程。
+飲料訂購系統。純靜態前端搭配 Firebase Firestore，支援多家飲料店菜單、匿名下單與管理員清除流程。GitHub Pages 是正式前端；Firebase Hosting 舊網址轉址至它。
 
 ## 關鍵時程
 
@@ -19,24 +19,22 @@
 - [x] 階段五：驗證匿名使用者新增／修改／刪除自己訂單（線上實測 29 項全數通過）
 - [x] 階段六：網站視覺、效能與可用性改善（標題對比、品牌 logo、banner 壓縮、選單分組、觸控尺寸、分享入口頁）
 - [x] 階段七：圖片素材集中至 `images/`
-- [ ] 階段八：由使用者實測主揪人登入與清除全部訂單，確認 `config/admin` 的 `passwordHash` 設定正確
-- [ ] 階段九：觀察 App Check 指標，確認多數請求已驗證後開啟 Firestore 強制執行
+- [ ] 階段八：由使用者實測主揪人登入與清除全部訂單，確認 Firebase Authentication 與 `config/admin.adminUid` 設定正確
+- [x] 階段九：Firestore App Check 已強制執行；Authentication 尚未強制執行
 - [ ] 階段十（待評估）：訂單目前對任何匿名使用者全部可讀（含姓名），評估是否要限制
 - [x] 階段十一：本機開發環境——看板渲染收斂為單一 `renderBoard()`，並新增 localhost 離線示範模式
-- [x] 階段十二：清除入口改為主揪人登入制——移除「一鍵清除」按鈕，改為登入後才顯示清除與跨人刪除；新增 `admin_probe` 驗證集合
+- [x] 階段十二：清除入口改為主揪人登入制——移除「一鍵清除」按鈕，改為登入後才顯示清除與跨人刪除
 
 ## 資料夾結構
 
 ```
-drink-ordering-gh/
+drink-ordering-fb/
 ├─ index.html          # 訂購主頁
 ├─ shop.html           # 店家頁
 ├─ shop.js             # 店家頁邏輯
 ├─ menu_data.js        # 菜單資料
 ├─ styles.css
 ├─ firestore.rules     # Firestore 安全規則
-├─ tools/
-│  └─ set-admin-password.mjs  # 產生管理員密碼與 SHA-256 雜湊
 ├─ firebase.json  .firebaserc  .firebase/
 ├─ 50lan.html  chingshin.html  coco.html  presotea.html  mrwish.html
 │                     # 分享入口頁（帶專屬 OG 標籤後轉址）
@@ -52,8 +50,8 @@ drink-ordering-gh/
 | 層級 | 平台 | 位置 | 讀取時機 |
 |------|------|------|---------|
 | L1 | 本地（GDrive） | `AGENTS.md`＋`handoff.md` | 每個 session |
-| L2 | GitHub | https://github.com/changyiwu/drink-ordering-gh （公開） | 指定時 |
-| L3 | Obsidian | `drink-ordering-gh/專案工作流程.md` | 有需要時 |
+| L2 | GitHub | https://github.com/changyiwu/drink-ordering-fb （公開） | 指定時 |
+| L3 | Obsidian | `drink-ordering-fb/專案工作流程.md` | 有需要時 |
 
 ## 三個檔案的職責（依「時效性」分家，不是依「詳細程度」）
 
@@ -75,7 +73,7 @@ drink-ordering-gh/
 
 - 判斷依據是 `shop.js` 的 `DEMO_HOSTS`（`localhost`／`127.0.0.1`／`''`）；正式網域不在清單內，線上行為不受影響
 - 示範模式下 `db`／`auth`／`ordersCollection` **刻意維持 `null`**——這是「本機碰不到正式資料」的保證機制，**不要補預設值或改成 eager 初始化**
-- **示範模式測不到 Firestore 規則**。欄位白名單、`update` 驗證、管理員雜湊授權都在規則層，只能在正式網域的瀏覽器環境驗；示範模式密碼固定 `demo`，走的不是真實雜湊比對
+- **示範模式測不到 Firestore 規則**。欄位白名單、`update` 驗證、管理員 UID 授權都在規則層；示範模式密碼固定 `demo`，不連線到 Firebase
 - Firebase SDK 是靜態 `import`，localhost 仍會從 gstatic 下載 SDK，只是不呼叫 `initializeApp`，所以不建立任何連線
 - 改看板 UI 只需改 `renderBoard()`，真假資料共用同一條路徑；**假訂單的欄位形狀要與 Firestore 文件一致**，別讓兩邊漂移
 - 一鍵清除的**正式分支刻意逐字保留**（含 empty 分支裡那個與 `finally` 重複的 `deleteDoc`）——安全路徑不順手重整
@@ -84,13 +82,12 @@ drink-ordering-gh/
 ### 安全
 
 - 刪除權限分兩層：訂購者只能刪自己的（`resource.data.userId == request.auth.uid`），主揪人登入後可刪任何人的、也能一次清空本頁（`isAdmin()`）。前端的登入狀態只是 UI 開關，**真正的判定完全在規則層**
-- `admin_probe` 集合的唯一用途是「回答密碼對不對」：`config/admin` 前端不可讀，前端沒有別的方式驗密碼，只能借規則的 allow／deny。**看到它像沒用的空集合也不要移除**，拿掉登入就永遠失敗
-- `admin_auth/{uid}` 在登入期間會一直存在（不再是清除當下寫完即刪）。登出、`pagehide` 與下次載入都會刪它，三個時機**都要保留**，否則殘留文件會讓同一匿名 UID 一直有管理權限
-- **不要在觀察指標前就開 App Check 的 Enforce**，會立刻讓所有使用者無法下單與讀取看板
-- **管理員密碼的暴力破解問題沒有根治**：規則層沒有速率限制，任何人都能匿名登入後反覆嘗試刪除來猜密碼。根治要把權限判定移到 Cloud Functions，而那需要 Blaze 方案（本專案 Billing 關閉）。使用者選擇維持原密碼值（同事需知道），**風險是已知且接受的**
+- 主揪人維持密碼單欄畫面，Firebase Authentication Email/Password 驗證固定帳號；訂購者的匿名 Auth 與管理員記憶體 Auth 分開，不能混用
+- Firestore `isAdmin()` 必須驗證密碼登入方式與 `config/admin.adminUid`，不能只相信前端旗標；舊 `admin_auth`、`admin_probe` 一律拒絕用戶端操作
+- Firebase Authentication 提供異常登入嘗試節流；Firestore App Check 正式站已強制執行，Authentication App Check 尚未強制執行
+- 變更密碼請到 Firebase Authentication 重設；舊密碼雜湊工具已移除，`passwordHash` 不再授權管理員
 - 換網域時要**同步更新三處**：`shop.js` 的 `APP_CHECK_HOSTS`、reCAPTCHA 主控台網域清單、Firebase Console 的 App Check 設定。漏改會**靜默失敗**（未 Enforce 時完全無感）
 - 規則中判斷 `size` 欄位必須寫 `data['size']`，寫 `data.size` 會與 Map 的 `size()` 方法混淆
-- 本機沒有 Java，Firestore 模擬器跑不起來
 
 ### 視覺
 

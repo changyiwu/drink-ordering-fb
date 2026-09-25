@@ -9,20 +9,13 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // SHA-256 十六進位字串（64 位小寫）
-    function isSha256Hex(value) {
-      return value is string
-        && value.size() == 64
-        && value.matches('^[0-9a-f]{64}$');
-    }
-
-    // 管理員授權：比對使用者臨時憑證與 config/admin 的密碼雜湊。
-    // 前端只會送出 SHA-256 雜湊，明文密碼不離開瀏覽器；config 前端完全不可讀寫，
-    // 只有安全規則內部的 get() 能取用（get() 不受 read 規則限制）。
+    // 管理員只認 Firebase Authentication 核發的密碼帳號 UID。
+    // config/admin 僅能由後台設定，瀏覽器不能讀寫。
     function isAdmin() {
-      return exists(/databases/$(database)/documents/admin_auth/$(request.auth.uid))
-        && get(/databases/$(database)/documents/admin_auth/$(request.auth.uid)).data.passwordHash
-           == get(/databases/$(database)/documents/config/admin).data.passwordHash;
+      return isSignedIn()
+        && request.auth.token.firebase.sign_in_provider == 'password'
+        && exists(/databases/$(database)/documents/config/admin)
+        && request.auth.uid == get(/databases/$(database)/documents/config/admin).data.adminUid;
     }
 
     // 訂單欄位白名單：只允許這 11 個欄位，且全部必填。
@@ -61,31 +54,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // 管理員臨時憑證：只能操作自己的文件，且只能放 SHA-256 雜湊
+    // 舊的雜湊憑證與探針不再接受任何用戶端操作。
     match /admin_auth/{uid} {
-      allow get: if isSignedIn() && request.auth.uid == uid;
-      allow list: if false;
-
-      allow create, update: if isSignedIn()
-        && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['passwordHash'])
-        && isSha256Hex(request.resource.data.passwordHash);
-
-      allow delete: if isSignedIn() && request.auth.uid == uid;
+      allow read, write: if false;
     }
 
-    // 主揪人登入探針：前端寫得進去，就代表 admin_auth 裡的雜湊與 config/admin 相符。
-    // config 前端不可讀，前端沒有別的方式知道密碼對不對，這裡借規則的 allow/deny
-    // 當作唯一的回覆管道。文件內容一律為空，寫完即刪。
     match /admin_probe/{uid} {
-      allow read: if false;
-
-      allow create, update: if isSignedIn()
-        && request.auth.uid == uid
-        && request.resource.data.keys().size() == 0
-        && isAdmin();
-
-      allow delete: if isSignedIn() && request.auth.uid == uid;
+      allow read, write: if false;
     }
 
     match /orders/{orderId} {
